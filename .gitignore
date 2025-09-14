@@ -1,0 +1,27 @@
+# Ignore everything and selectively allow files
+*
+
+!.gitignore
+!.zed/settings.json
+!CODEOWNERS
+!CODE_OF_CONDUCT.md
+!LICENSE
+!README.md
+!typos.toml
+
+!.envrc
+!flake.nix
+!flake.lock
+
+!Cargo.toml
+!Cargo.lock
+!src/*.rs
+target/**/*
+
+# Recurse through sub-directories applying the same patterns
+!*/
+
+
+# Added by cargo
+
+/target
