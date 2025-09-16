@@ -5,3 +5,5 @@ edition = "2024"
 description = "Context-aware YAML to markdown document generator"
 
 [dependencies]
+tree-sitter = "0.25.9"
+tree-sitter-yaml = "0.7.1"
