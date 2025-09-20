@@ -3,5 +3,10 @@ name = "yam"
 version = "0.1.0"
 edition = "2024"
 description = "Context-aware YAML to markdown document generator"
+license = "MIT"
 
 [dependencies]
+anyhow = "1.0.99"
+clap = { version = "4.5.47", features = ["derive"] }
+tree-sitter = "0.25.9"
+tree-sitter-yaml = "0.7.1"
