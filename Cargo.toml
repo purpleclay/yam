@@ -8,5 +8,8 @@ license = "MIT"
 [dependencies]
 anyhow = "1.0.99"
 clap = { version = "4.5.47", features = ["derive"] }
+serde = { version = "1.0.226", features = ["derive"] }
+
+tera = "1.20.0"
 tree-sitter = "0.25.9"
 tree-sitter-yaml = "0.7.1"

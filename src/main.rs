@@ -1,3 +1,4 @@
+mod markdown;
 mod parser;
 
 use anyhow::{Context, Result};
@@ -7,7 +8,7 @@ use std::{
     io::{self, Read},
 };
 
-use crate::parser::parse;
+use crate::{markdown::render_markdown, parser::parse};
 
 #[derive(Parser, Debug)]
 #[command(author)]
@@ -30,6 +31,7 @@ fn main() -> Result<()> {
     }
 
     let document = parse(&content)?;
-    println!("{}", document);
+    let markdown = render_markdown(&document)?;
+    println!("{}", markdown);
     Ok(())
 }
