@@ -1,5 +1,3 @@
-use std::fmt::{self, Display};
-
 use anyhow::{Context, Result, anyhow};
 use tree_sitter::{Node, Parser};
 
@@ -8,21 +6,9 @@ pub struct Document {
     pub root: Scalar,
 }
 
-impl Display for Document {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.root)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Scalar {
     pub value: ScalarType,
-}
-
-impl Display for Scalar {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.value)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -35,68 +21,10 @@ pub enum ScalarType {
     Map(Vec<MapItem>),
 }
 
-impl Display for ScalarType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ScalarType::String(s) => write!(f, "\"{}\"", s),
-            ScalarType::Integer(i) => write!(f, "{}", i),
-            ScalarType::Float(fl) => write!(f, "{}", fl),
-            ScalarType::Boolean(b) => write!(f, "{}", b),
-            ScalarType::List(items) => {
-                writeln!(f, "[")?;
-                for (i, item) in items.iter().enumerate() {
-                    write!(f, "  {}: {}", i, indent_lines(&item.to_string(), 2))?;
-                    if i < items.len() - 1 {
-                        writeln!(f, ",")?;
-                    } else {
-                        writeln!(f)?;
-                    }
-                }
-                write!(f, "]")
-            }
-            ScalarType::Map(items) => {
-                writeln!(f, "{{")?;
-                for (i, item) in items.iter().enumerate() {
-                    write!(f, "  {}", item)?;
-                    if i < items.len() - 1 {
-                        writeln!(f, ",")?;
-                    } else {
-                        writeln!(f)?;
-                    }
-                }
-                write!(f, "}}")
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct MapItem {
-    pub key: Scalar,
+    pub key: String,
     pub value: Scalar,
-}
-
-impl Display for MapItem {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let key_str = self.key.to_string();
-        let value_str = indent_lines(&self.value.to_string(), 2);
-        write!(f, "{}: {}", key_str, value_str)
-    }
-}
-
-fn indent_lines(s: &str, indent: usize) -> String {
-    let indent_str = " ".repeat(indent);
-    s.lines()
-        .enumerate()
-        .map(|(i, line)| {
-            if i == 0 {
-                line.to_string()
-            } else {
-                format!("{}{}", indent_str, line)
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 struct YamlParser<'a> {
@@ -217,11 +145,22 @@ impl<'a> YamlParser<'a> {
                     .child_by_field_name("value")
                     .ok_or_else(|| anyhow!("mandatory map value is missing"))?;
 
-                let key = self.parse_tree(&key_node)?;
+                let key = self.parse_key_as_string(&key_node)?;
                 let value = self.parse_tree(&value_node)?;
                 Ok(MapItem { key, value })
             })
             .collect()
+    }
+
+    fn parse_key_as_string(&self, node: &Node) -> Result<String> {
+        let scalar = self.parse_tree(node)?;
+        match scalar.value {
+            ScalarType::String(s) => Ok(s),
+            ScalarType::Integer(i) => Ok(i.to_string()),
+            ScalarType::Float(f) => Ok(f.to_string()),
+            ScalarType::Boolean(b) => Ok(b.to_string()),
+            _ => Err(anyhow!("complex types cannot be used as map keys")),
+        }
     }
 }
 
@@ -344,12 +283,7 @@ mod tests {
         match document.root.value {
             ScalarType::Map(ref map) => {
                 assert_eq!(map.len(), 1);
-                assert_eq!(
-                    map[0].key,
-                    Scalar {
-                        value: ScalarType::String("name".to_string())
-                    }
-                );
+                assert_eq!(map[0].key, "name");
                 assert_eq!(
                     map[0].value,
                     Scalar {
