@@ -68,6 +68,7 @@ fn format_scalar_value(value: &ScalarType) -> String {
         ScalarType::Integer(n) => n.to_string(),
         ScalarType::Float(n) => n.to_string(),
         ScalarType::Boolean(b) => b.to_string(),
+        ScalarType::Null => "null".to_string(),
         _ => "".to_string(),
     }
 }

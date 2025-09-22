@@ -13,6 +13,7 @@ pub struct Scalar {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ScalarType {
+    Null,
     String(String),
     Integer(i64),
     Float(f64),
@@ -120,6 +121,9 @@ impl<'a> YamlParser<'a> {
                     value: ScalarType::String(text.to_string()),
                 })
             }
+            "null_scalar" => Ok(Scalar {
+                value: ScalarType::Null,
+            }),
             _ => Err(anyhow!("unexpected node kind {}", scalar.kind())),
         }
     }
@@ -140,13 +144,14 @@ impl<'a> YamlParser<'a> {
                 let key_node = child
                     .child_by_field_name("key")
                     .ok_or_else(|| anyhow!("mandatory map key is missing"))?;
-
-                let value_node = child
-                    .child_by_field_name("value")
-                    .ok_or_else(|| anyhow!("mandatory map value is missing"))?;
-
                 let key = self.parse_key_as_string(&key_node)?;
-                let value = self.parse_tree(&value_node)?;
+
+                let value = match child.child_by_field_name("value") {
+                    Some(value_node) => self.parse_tree(&value_node)?,
+                    None => Scalar {
+                        value: ScalarType::Null,
+                    },
+                };
                 Ok(MapItem { key, value })
             })
             .collect()
@@ -234,6 +239,20 @@ mod tests {
     }
 
     #[test]
+    fn parse_scalar_null() -> Result<()> {
+        let document = parse("null")?;
+        assert!(matches!(document.root.value, ScalarType::Null));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_null_as_tilde() -> Result<()> {
+        let document = parse("~")?;
+        assert!(matches!(document.root.value, ScalarType::Null));
+        Ok(())
+    }
+
+    #[test]
     fn parse_scalar_list() -> Result<()> {
         let yaml = r#"
             - 42
@@ -288,6 +307,27 @@ mod tests {
                     map[0].value,
                     Scalar {
                         value: ScalarType::String("truman".to_string())
+                    }
+                );
+            }
+            _ => panic!("root node should contain a map scalar"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_map_with_empty_value() -> Result<()> {
+        let document = parse("name: ")?;
+
+        match document.root.value {
+            ScalarType::Map(ref map) => {
+                assert_eq!(map.len(), 1);
+                assert_eq!(map[0].key, "name");
+                assert_eq!(
+                    map[0].value,
+                    Scalar {
+                        value: ScalarType::Null
                     }
                 );
             }
