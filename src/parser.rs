@@ -67,10 +67,16 @@ impl<'a> YamlParser<'a> {
                     value: ScalarType::List(scalar_items),
                 })
             }
-            "block_mapping" => {
-                let map_items = self.parse_block_mapping(node)?;
+            "block_mapping" | "flow_mapping" => {
+                let map_items = self.parse_mapping(node)?;
                 Ok(Scalar {
                     value: ScalarType::Map(map_items),
+                })
+            }
+            "flow_sequence" => {
+                let scalar_items = self.parse_flow_sequence(node)?;
+                Ok(Scalar {
+                    value: ScalarType::List(scalar_items),
                 })
             }
             _ => Err(anyhow!("unexpected node kind {}", node.kind())),
@@ -136,25 +142,46 @@ impl<'a> YamlParser<'a> {
             .collect()
     }
 
-    fn parse_block_mapping(&self, node: Node) -> Result<Vec<MapItem>> {
+    fn parse_flow_sequence(&self, node: Node) -> Result<Vec<Scalar>> {
         let mut cursor = node.walk();
         node.children(&mut cursor)
-            .filter(|child| child.kind() == "block_mapping_pair")
-            .map(|child| {
-                let key_node = child
-                    .child_by_field_name("key")
-                    .ok_or_else(|| anyhow!("mandatory map key is missing"))?;
-                let key = self.parse_key_as_string(&key_node)?;
-
-                let value = match child.child_by_field_name("value") {
-                    Some(value_node) => self.parse_tree(&value_node)?,
-                    None => Scalar {
-                        value: ScalarType::Null,
-                    },
-                };
-                Ok(MapItem { key, value })
-            })
+            .filter(|child| child.kind() == "flow_node")
+            .map(|child| self.parse_tree(&child))
             .collect()
+    }
+
+    fn parse_mapping(&self, node: Node) -> Result<Vec<MapItem>> {
+        let mut cursor = node.walk();
+        let mut items = Vec::new();
+
+        for child in node.children(&mut cursor) {
+            match child.kind() {
+                "block_mapping_pair" | "flow_pair" => {
+                    let key_node = child
+                        .child_by_field_name("key")
+                        .ok_or_else(|| anyhow!("mandatory map key is missing"))?;
+                    let key = self.parse_key_as_string(&key_node)?;
+
+                    let value = match child.child_by_field_name("value") {
+                        Some(value_node) => self.parse_tree(&value_node)?,
+                        None => Scalar {
+                            value: ScalarType::Null,
+                        },
+                    };
+                    items.push(MapItem { key, value });
+                }
+                "flow_node" => {
+                    let key = self.parse_key_as_string(&child)?;
+                    let value = Scalar {
+                        value: ScalarType::Null,
+                    };
+                    items.push(MapItem { key, value });
+                }
+                _ => {}
+            }
+        }
+
+        Ok(items)
     }
 
     fn parse_key_as_string(&self, node: &Node) -> Result<String> {
@@ -296,9 +323,43 @@ mod tests {
     }
 
     #[test]
+    fn parse_scalar_list_with_flow_sequence() -> Result<()> {
+        let document = parse("[1,2,3]")?;
+        assert!(matches!(
+            document.root.value,
+            ScalarType::List(ref items) if items.len() == 3
+        ));
+
+        assert!(matches!(
+            document.root.value,
+            ScalarType::List(ref items) if items[0] == Scalar { value: ScalarType::Integer(1) }
+        ));
+
+        assert!(matches!(
+            document.root.value,
+            ScalarType::List(ref items) if items[1] == Scalar { value: ScalarType::Integer(2) }
+        ));
+
+        assert!(matches!(
+            document.root.value,
+            ScalarType::List(ref items) if items[2] == Scalar { value: ScalarType::Integer(3) }
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_list_with_empty_flow_sequence() -> Result<()> {
+        let document = parse("[]")?;
+        assert!(matches!(
+            document.root.value,
+            ScalarType::List(ref items) if items.len() == 0
+        ));
+        Ok(())
+    }
+
+    #[test]
     fn parse_scalar_map() -> Result<()> {
         let document = parse("name: truman")?;
-
         match document.root.value {
             ScalarType::Map(ref map) => {
                 assert_eq!(map.len(), 1);
@@ -319,7 +380,6 @@ mod tests {
     #[test]
     fn parse_scalar_map_with_empty_value() -> Result<()> {
         let document = parse("name: ")?;
-
         match document.root.value {
             ScalarType::Map(ref map) => {
                 assert_eq!(map.len(), 1);
@@ -334,6 +394,70 @@ mod tests {
             _ => panic!("root node should contain a map scalar"),
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_map_with_flow_sequence() -> Result<()> {
+        let document = parse("{x: 1, y: 2}")?;
+        match document.root.value {
+            ScalarType::Map(ref map) => {
+                assert_eq!(map.len(), 2);
+                assert_eq!(map[0].key, "x");
+                assert_eq!(
+                    map[0].value,
+                    Scalar {
+                        value: ScalarType::Integer(1)
+                    }
+                );
+                assert_eq!(map[1].key, "y");
+                assert_eq!(
+                    map[1].value,
+                    Scalar {
+                        value: ScalarType::Integer(2)
+                    }
+                );
+            }
+            _ => panic!("root node should contain a map scalar"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_map_with_empty_flow_sequence() -> Result<()> {
+        let document = parse("{}")?;
+        match document.root.value {
+            ScalarType::Map(ref map) => {
+                assert_eq!(map.len(), 0);
+            }
+            _ => panic!("root node should contain a map scalar"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_map_with_flow_sequence_only_keys() -> Result<()> {
+        let document = parse("{x, y:}")?;
+        match document.root.value {
+            ScalarType::Map(ref map) => {
+                assert_eq!(map.len(), 2);
+                assert_eq!(map[0].key, "x");
+                assert_eq!(
+                    map[0].value,
+                    Scalar {
+                        value: ScalarType::Null
+                    }
+                );
+                assert_eq!(map[1].key, "y");
+                assert_eq!(
+                    map[1].value,
+                    Scalar {
+                        value: ScalarType::Null
+                    }
+                );
+            }
+            _ => panic!("root node should contain a map scalar"),
+        }
         Ok(())
     }
 }
