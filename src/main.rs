@@ -31,7 +31,9 @@ fn main() -> Result<()> {
     }
 
     let document = parse(&content)?;
-    let markdown = render_markdown(&document)?;
-    println!("{}", markdown);
+    if let Some(doc) = document {
+        let markdown = render_markdown(&doc)?;
+        println!("{}", markdown);
+    }
     Ok(())
 }

@@ -28,6 +28,14 @@ pub struct MapItem {
     pub value: Scalar,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ParseError {
+    #[error("an empty document")]
+    EmptyDocument,
+    #[error("parsing error: {0}")]
+    Generic(#[from] anyhow::Error),
+}
+
 struct YamlParser<'a> {
     source: &'a str,
 }
@@ -37,18 +45,18 @@ impl<'a> YamlParser<'a> {
         Self { source }
     }
 
-    fn parse_tree(&self, node: &Node) -> Result<Scalar> {
+    fn parse_tree(&self, node: &Node) -> Result<Scalar, ParseError> {
         let mut cursor = node.walk();
 
         for child in node.children(&mut cursor) {
             match child.kind() {
                 "document" | "stream" => return self.parse_tree(&child),
                 "-" => {}
-                _ => return self.parse_value(child),
+                _ => return Ok(self.parse_value(child).map_err(ParseError::Generic)?),
             }
         }
 
-        Err(anyhow!("no parseable content found"))
+        Err(ParseError::EmptyDocument)
     }
 
     fn parse_value(&self, node: Node) -> Result<Scalar> {
@@ -134,7 +142,7 @@ impl<'a> YamlParser<'a> {
         }
     }
 
-    fn parse_block_sequence(&self, node: Node) -> Result<Vec<Scalar>> {
+    fn parse_block_sequence(&self, node: Node) -> Result<Vec<Scalar>, ParseError> {
         let mut cursor = node.walk();
         node.children(&mut cursor)
             .filter(|child| child.kind() == "block_sequence_item")
@@ -142,7 +150,7 @@ impl<'a> YamlParser<'a> {
             .collect()
     }
 
-    fn parse_flow_sequence(&self, node: Node) -> Result<Vec<Scalar>> {
+    fn parse_flow_sequence(&self, node: Node) -> Result<Vec<Scalar>, ParseError> {
         let mut cursor = node.walk();
         node.children(&mut cursor)
             .filter(|child| child.kind() == "flow_node")
@@ -196,7 +204,7 @@ impl<'a> YamlParser<'a> {
     }
 }
 
-pub fn parse(text: &str) -> Result<Document> {
+pub fn parse(text: &str) -> Result<Option<Document>> {
     let mut parser = Parser::new();
     let language = tree_sitter_yaml::LANGUAGE;
 
@@ -210,9 +218,12 @@ pub fn parse(text: &str) -> Result<Document> {
 
     let root_node = tree.root_node();
     let yaml_parser = YamlParser::new(text);
-    let root_scalar = yaml_parser.parse_tree(&root_node)?;
 
-    Ok(Document { root: root_scalar })
+    match yaml_parser.parse_tree(&root_node) {
+        Ok(root_scalar) => Ok(Some(Document { root: root_scalar })),
+        Err(ParseError::EmptyDocument) => Ok(None),
+        Err(ParseError::Generic(e)) => Err(e),
+    }
 }
 
 #[cfg(test)]
@@ -221,7 +232,7 @@ mod tests {
 
     #[test]
     fn parse_scalar_integer() -> Result<()> {
-        let document = parse("42")?;
+        let document = parse("42")?.unwrap();
         assert!(matches!(document.root.value, ScalarType::Integer(42)));
 
         Ok(())
@@ -229,7 +240,7 @@ mod tests {
 
     #[test]
     fn parse_scalar_float() -> Result<()> {
-        let document = parse("42.56")?;
+        let document = parse("42.56")?.unwrap();
         assert!(matches!(document.root.value, ScalarType::Float(42.56)));
 
         Ok(())
@@ -237,7 +248,7 @@ mod tests {
 
     #[test]
     fn parse_scalar_boolean() -> Result<()> {
-        let document = parse("true")?;
+        let document = parse("true")?.unwrap();
         assert!(matches!(document.root.value, ScalarType::Boolean(true)));
 
         Ok(())
@@ -245,7 +256,7 @@ mod tests {
 
     #[test]
     fn parse_scalar_double_quoted_string() -> Result<()> {
-        let document = parse("\"hello, world!\"")?;
+        let document = parse("\"hello, world!\"")?.unwrap();
         assert!(matches!(
             document.root.value,
             ScalarType::String(ref s) if s == "hello, world!"
@@ -256,7 +267,7 @@ mod tests {
 
     #[test]
     fn parse_scalar_single_quoted_string() -> Result<()> {
-        let document = parse("'good afternoon, good evening, and good night'")?;
+        let document = parse("'good afternoon, good evening, and good night'")?.unwrap();
         assert!(matches!(
             document.root.value,
             ScalarType::String(ref s) if s == "good afternoon, good evening, and good night"
@@ -267,14 +278,14 @@ mod tests {
 
     #[test]
     fn parse_scalar_null() -> Result<()> {
-        let document = parse("null")?;
+        let document = parse("null")?.unwrap();
         assert!(matches!(document.root.value, ScalarType::Null));
         Ok(())
     }
 
     #[test]
     fn parse_scalar_null_as_tilde() -> Result<()> {
-        let document = parse("~")?;
+        let document = parse("~")?.unwrap();
         assert!(matches!(document.root.value, ScalarType::Null));
         Ok(())
     }
@@ -288,7 +299,7 @@ mod tests {
             - "hello, world!"
             - 'good afternoon, good evening, and good night'
             "#;
-        let document = parse(yaml)?;
+        let document = parse(yaml)?.unwrap();
         assert!(matches!(
             document.root.value,
             ScalarType::List(ref items) if items.len() == 5
@@ -324,7 +335,7 @@ mod tests {
 
     #[test]
     fn parse_scalar_list_with_flow_sequence() -> Result<()> {
-        let document = parse("[1,2,3]")?;
+        let document = parse("[1,2,3]")?.unwrap();
         assert!(matches!(
             document.root.value,
             ScalarType::List(ref items) if items.len() == 3
@@ -349,7 +360,7 @@ mod tests {
 
     #[test]
     fn parse_scalar_list_with_empty_flow_sequence() -> Result<()> {
-        let document = parse("[]")?;
+        let document = parse("[]")?.unwrap();
         assert!(matches!(
             document.root.value,
             ScalarType::List(ref items) if items.len() == 0
@@ -359,7 +370,8 @@ mod tests {
 
     #[test]
     fn parse_scalar_map() -> Result<()> {
-        let document = parse("name: truman")?;
+        let document = parse("name: truman")?.unwrap();
+
         match document.root.value {
             ScalarType::Map(ref map) => {
                 assert_eq!(map.len(), 1);
@@ -379,7 +391,8 @@ mod tests {
 
     #[test]
     fn parse_scalar_map_with_empty_value() -> Result<()> {
-        let document = parse("name: ")?;
+        let document = parse("name: ")?.unwrap();
+
         match document.root.value {
             ScalarType::Map(ref map) => {
                 assert_eq!(map.len(), 1);
@@ -399,7 +412,7 @@ mod tests {
 
     #[test]
     fn parse_scalar_map_with_flow_sequence() -> Result<()> {
-        let document = parse("{x: 1, y: 2}")?;
+        let document = parse("{x: 1, y: 2}")?.unwrap();
         match document.root.value {
             ScalarType::Map(ref map) => {
                 assert_eq!(map.len(), 2);
@@ -425,7 +438,7 @@ mod tests {
 
     #[test]
     fn parse_scalar_map_with_empty_flow_sequence() -> Result<()> {
-        let document = parse("{}")?;
+        let document = parse("{}")?.unwrap();
         match document.root.value {
             ScalarType::Map(ref map) => {
                 assert_eq!(map.len(), 0);
@@ -437,7 +450,7 @@ mod tests {
 
     #[test]
     fn parse_scalar_map_with_flow_sequence_only_keys() -> Result<()> {
-        let document = parse("{x, y:}")?;
+        let document = parse("{x, y:}")?.unwrap();
         match document.root.value {
             ScalarType::Map(ref map) => {
                 assert_eq!(map.len(), 2);
