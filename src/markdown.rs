@@ -1,13 +1,13 @@
 use anyhow::{Context, Result};
 use serde::Serialize;
 
-use crate::parser::{Document, ScalarType};
+use crate::parser::{Document, Scalar, ScalarType};
 
 pub const TEMPLATE: &str = r#"
-| Name | Value |
-|------|-------|
+| Name | Value | Description |
+|------|-------|-------------|
 {%- for row in rows %}
-| {{ row.name }} | {{ row.value }} |
+| {{ row.name }} | {{ row.value }} | {{ row.description }} |
 {%- endfor %}
 "#;
 
@@ -15,6 +15,7 @@ pub const TEMPLATE: &str = r#"
 struct TableRow {
     name: String,
     value: String,
+    description: String,
 }
 
 pub fn render_markdown(document: &Document) -> Result<String> {
@@ -31,12 +32,12 @@ pub fn render_markdown(document: &Document) -> Result<String> {
 
 fn flatten_document(document: &Document) -> Vec<TableRow> {
     let mut rows = Vec::new();
-    flatten_scalar(&document.root.value, String::new(), &mut rows);
+    flatten_scalar(&document.root, String::new(), &mut rows);
     rows
 }
 
-fn flatten_scalar(scalar: &ScalarType, key: String, rows: &mut Vec<TableRow>) {
-    match &scalar {
+fn flatten_scalar(scalar: &Scalar, key: String, rows: &mut Vec<TableRow>) {
+    match &scalar.value {
         ScalarType::Map(map) => {
             for entry in map {
                 let new_key = if key.is_empty() {
@@ -44,19 +45,20 @@ fn flatten_scalar(scalar: &ScalarType, key: String, rows: &mut Vec<TableRow>) {
                 } else {
                     format!("{}.{}", key, entry.key)
                 };
-                flatten_scalar(&entry.value.value, new_key, rows);
+                flatten_scalar(&entry.value, new_key, rows);
             }
         }
         ScalarType::List(list) => {
             for (index, item) in list.iter().enumerate() {
                 let new_key = format!("{}.{}", key, index);
-                flatten_scalar(&item.value, new_key, rows);
+                flatten_scalar(&item, new_key, rows);
             }
         }
         _ => {
             rows.push(TableRow {
                 name: key,
-                value: format_scalar_value(scalar),
+                value: format_scalar_value(&scalar.value),
+                description: scalar.comment.clone().unwrap_or_default(),
             });
         }
     }

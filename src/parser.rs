@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::{Context, Result, anyhow};
 use tree_sitter::{Node, Parser};
 
@@ -9,6 +11,7 @@ pub struct Document {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Scalar {
     pub value: ScalarType,
+    pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -38,11 +41,50 @@ pub enum ParseError {
 
 struct YamlParser<'a> {
     source: &'a str,
+    comments: HashMap<usize, String>,
 }
 
 impl<'a> YamlParser<'a> {
     fn new(source: &'a str) -> Self {
-        Self { source }
+        Self {
+            source,
+            comments: HashMap::new(),
+        }
+    }
+
+    fn parse(&mut self, node: &Node) -> Result<Scalar, ParseError> {
+        self.parse_comments(&node);
+        self.parse_tree(node)
+    }
+
+    fn parse_comments(&mut self, node: &Node) {
+        if node.kind() == "comment" {
+            let line = node.start_position().row;
+            let text = &self.source[node.byte_range()];
+            self.comments
+                .insert(line, text.trim_start_matches('#').trim().to_string());
+        }
+
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            self.parse_comments(&child);
+        }
+    }
+
+    fn find_comment_for_node(&self, node: &Node) -> Option<String> {
+        let line_number = node.start_position().row;
+
+        if let Some(comment) = self.comments.get(&line_number) {
+            return Some(comment.clone());
+        }
+
+        if line_number > 0 {
+            if let Some(comment) = self.comments.get(&(line_number - 1)) {
+                return Some(comment.clone());
+            }
+        }
+
+        None
     }
 
     fn parse_tree(&self, node: &Node) -> Result<Scalar, ParseError> {
@@ -51,8 +93,15 @@ impl<'a> YamlParser<'a> {
         for child in node.children(&mut cursor) {
             match child.kind() {
                 "document" | "stream" => return self.parse_tree(&child),
-                "-" => {}
-                _ => return Ok(self.parse_value(child).map_err(ParseError::Generic)?),
+                "-" | "comment" => {}
+                _ => {
+                    let mut scalar = self.parse_value(child).map_err(ParseError::Generic)?;
+                    if scalar.comment.is_none() {
+                        scalar.comment = self.find_comment_for_node(&child);
+                    }
+
+                    return Ok(scalar);
+                }
             }
         }
 
@@ -73,18 +122,21 @@ impl<'a> YamlParser<'a> {
                 let scalar_items = self.parse_block_sequence(node)?;
                 Ok(Scalar {
                     value: ScalarType::List(scalar_items),
+                    comment: None,
                 })
             }
             "block_mapping" | "flow_mapping" => {
                 let map_items = self.parse_mapping(node)?;
                 Ok(Scalar {
                     value: ScalarType::Map(map_items),
+                    comment: None,
                 })
             }
             "flow_sequence" => {
                 let scalar_items = self.parse_flow_sequence(node)?;
                 Ok(Scalar {
                     value: ScalarType::List(scalar_items),
+                    comment: None,
                 })
             }
             _ => Err(anyhow!("unexpected node kind {}", node.kind())),
@@ -95,6 +147,7 @@ impl<'a> YamlParser<'a> {
         let text = &self.source[node.byte_range()];
         Ok(Scalar {
             value: ScalarType::String(text[1..text.len() - 1].to_string()),
+            comment: None,
         })
     }
 
@@ -111,6 +164,7 @@ impl<'a> YamlParser<'a> {
                     .map_err(|_| anyhow!("invalid integer"))?;
                 Ok(Scalar {
                     value: ScalarType::Integer(value),
+                    comment: None,
                 })
             }
             "float_scalar" => {
@@ -118,6 +172,7 @@ impl<'a> YamlParser<'a> {
                 let value = text.parse::<f64>().map_err(|_| anyhow!("invalid float"))?;
                 Ok(Scalar {
                     value: ScalarType::Float(value),
+                    comment: None,
                 })
             }
             "boolean_scalar" => {
@@ -127,16 +182,19 @@ impl<'a> YamlParser<'a> {
                     .map_err(|_| anyhow!("invalid boolean"))?;
                 Ok(Scalar {
                     value: ScalarType::Boolean(value),
+                    comment: None,
                 })
             }
             "string_scalar" => {
                 let text = &self.source[scalar.byte_range()];
                 Ok(Scalar {
                     value: ScalarType::String(text.to_string()),
+                    comment: None,
                 })
             }
             "null_scalar" => Ok(Scalar {
                 value: ScalarType::Null,
+                comment: None,
             }),
             _ => Err(anyhow!("unexpected node kind {}", scalar.kind())),
         }
@@ -174,6 +232,7 @@ impl<'a> YamlParser<'a> {
                         Some(value_node) => self.parse_tree(&value_node)?,
                         None => Scalar {
                             value: ScalarType::Null,
+                            comment: None,
                         },
                     };
                     items.push(MapItem { key, value });
@@ -182,6 +241,7 @@ impl<'a> YamlParser<'a> {
                     let key = self.parse_key_as_string(&child)?;
                     let value = Scalar {
                         value: ScalarType::Null,
+                        comment: None,
                     };
                     items.push(MapItem { key, value });
                 }
@@ -217,9 +277,9 @@ pub fn parse(text: &str) -> Result<Option<Document>> {
         .ok_or_else(|| anyhow!("failed to parse YAML document"))?;
 
     let root_node = tree.root_node();
-    let yaml_parser = YamlParser::new(text);
+    let mut yaml_parser = YamlParser::new(text);
 
-    match yaml_parser.parse_tree(&root_node) {
+    match yaml_parser.parse(&root_node) {
         Ok(root_scalar) => Ok(Some(Document { root: root_scalar })),
         Err(ParseError::EmptyDocument) => Ok(None),
         Err(ParseError::Generic(e)) => Err(e),
@@ -228,12 +288,23 @@ pub fn parse(text: &str) -> Result<Option<Document>> {
 
 #[cfg(test)]
 mod tests {
+    use anyhow::Ok;
+
     use super::*;
 
     #[test]
     fn parse_scalar_integer() -> Result<()> {
         let document = parse("42")?.unwrap();
-        assert!(matches!(document.root.value, ScalarType::Integer(42)));
+        assert_eq!(document.root.value, ScalarType::Integer(42));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_integer_with_comment() -> Result<()> {
+        let document = parse("42 # comment")?.unwrap();
+        assert_eq!(document.root.value, ScalarType::Integer(42));
+        assert_eq!(document.root.comment, Some("comment".to_string()));
 
         Ok(())
     }
@@ -241,7 +312,20 @@ mod tests {
     #[test]
     fn parse_scalar_float() -> Result<()> {
         let document = parse("42.56")?.unwrap();
-        assert!(matches!(document.root.value, ScalarType::Float(42.56)));
+        assert_eq!(document.root.value, ScalarType::Float(42.56));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_float_with_comment() -> Result<()> {
+        let yaml = r#"
+        # comment
+        42.56
+        "#;
+        let document = parse(yaml)?.unwrap();
+        assert_eq!(document.root.value, ScalarType::Float(42.56));
+        assert_eq!(document.root.comment, Some("comment".to_string()));
 
         Ok(())
     }
@@ -249,7 +333,16 @@ mod tests {
     #[test]
     fn parse_scalar_boolean() -> Result<()> {
         let document = parse("true")?.unwrap();
-        assert!(matches!(document.root.value, ScalarType::Boolean(true)));
+        assert_eq!(document.root.value, ScalarType::Boolean(true));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_boolean_with_comment() -> Result<()> {
+        let document = parse("true # comment")?.unwrap();
+        assert_eq!(document.root.value, ScalarType::Boolean(true));
+        assert_eq!(document.root.comment, Some("comment".to_string()));
 
         Ok(())
     }
@@ -257,10 +350,22 @@ mod tests {
     #[test]
     fn parse_scalar_double_quoted_string() -> Result<()> {
         let document = parse("\"hello, world!\"")?.unwrap();
-        assert!(matches!(
+        assert_eq!(
             document.root.value,
-            ScalarType::String(ref s) if s == "hello, world!"
-        ));
+            ScalarType::String("hello, world!".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_double_quoted_string_with_comment() -> Result<()> {
+        let document = parse("\"hello, world!\" # comment")?.unwrap();
+        assert_eq!(
+            document.root.value,
+            ScalarType::String("hello, world!".to_string())
+        );
+        assert_eq!(document.root.comment, Some("comment".to_string()));
 
         Ok(())
     }
@@ -268,10 +373,23 @@ mod tests {
     #[test]
     fn parse_scalar_single_quoted_string() -> Result<()> {
         let document = parse("'good afternoon, good evening, and good night'")?.unwrap();
-        assert!(matches!(
+        assert_eq!(
             document.root.value,
-            ScalarType::String(ref s) if s == "good afternoon, good evening, and good night"
-        ));
+            ScalarType::String("good afternoon, good evening, and good night".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_single_quoted_string_with_comment() -> Result<()> {
+        let document = parse("'good afternoon, good evening, and good night' # comment")?.unwrap();
+        assert_eq!(
+            document.root.value,
+            ScalarType::String("good afternoon, good evening, and good night".to_string())
+        );
+
+        assert_eq!(document.root.comment, Some("comment".to_string()));
 
         Ok(())
     }
@@ -279,14 +397,22 @@ mod tests {
     #[test]
     fn parse_scalar_null() -> Result<()> {
         let document = parse("null")?.unwrap();
-        assert!(matches!(document.root.value, ScalarType::Null));
+        assert_eq!(document.root.value, ScalarType::Null);
         Ok(())
     }
 
     #[test]
     fn parse_scalar_null_as_tilde() -> Result<()> {
         let document = parse("~")?.unwrap();
-        assert!(matches!(document.root.value, ScalarType::Null));
+        assert_eq!(document.root.value, ScalarType::Null);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_null_with_comment() -> Result<()> {
+        let document = parse("null # comment")?.unwrap();
+        assert_eq!(document.root.value, ScalarType::Null);
+        assert_eq!(document.root.comment, Some("comment".to_string()));
         Ok(())
     }
 
@@ -300,35 +426,83 @@ mod tests {
             - 'good afternoon, good evening, and good night'
             "#;
         let document = parse(yaml)?.unwrap();
-        assert!(matches!(
-            document.root.value,
-            ScalarType::List(ref items) if items.len() == 5
-        ));
 
-        assert!(matches!(
-            document.root.value,
-            ScalarType::List(ref items) if items[0] == Scalar { value: ScalarType::Integer(42) }
-        ));
+        let items = match &document.root.value {
+            ScalarType::List(items) => items,
+            _ => panic!("root node should contain a list scalar"),
+        };
 
-        assert!(matches!(
-            document.root.value,
-            ScalarType::List(ref items) if items[1] == Scalar { value: ScalarType::Float(42.56) }
-        ));
+        assert_eq!(items.len(), 5);
+        assert_eq!(
+            items[0],
+            Scalar {
+                value: ScalarType::Integer(42),
+                comment: None
+            }
+        );
+        assert_eq!(
+            items[1],
+            Scalar {
+                value: ScalarType::Float(42.56),
+                comment: None
+            }
+        );
+        assert_eq!(
+            items[2],
+            Scalar {
+                value: ScalarType::Boolean(true),
+                comment: None
+            }
+        );
+        assert_eq!(
+            items[3],
+            Scalar {
+                value: ScalarType::String("hello, world!".to_string()),
+                comment: None
+            }
+        );
+        assert_eq!(
+            items[4],
+            Scalar {
+                value: ScalarType::String(
+                    "good afternoon, good evening, and good night".to_string()
+                ),
+                comment: None
+            }
+        );
 
-        assert!(matches!(
-            document.root.value,
-            ScalarType::List(ref items) if items[2] == Scalar { value: ScalarType::Boolean(true) }
-        ));
+        Ok(())
+    }
 
-        assert!(matches!(
-            document.root.value,
-            ScalarType::List(ref items) if items[3] == Scalar { value: ScalarType::String("hello, world!".to_string()) }
-        ));
+    #[test]
+    fn parse_scalar_list_with_comments() -> Result<()> {
+        let yaml = r#"
+            # comment for item 1
+            - 42
+            - 42.56 # comment for item 2
+            "#;
+        let document = parse(yaml)?.unwrap();
 
-        assert!(matches!(
-            document.root.value,
-            ScalarType::List(ref items) if items[4] == Scalar { value: ScalarType::String("good afternoon, good evening, and good night".to_string()) }
-        ));
+        let items = match &document.root.value {
+            ScalarType::List(items) => items,
+            _ => panic!("root node should contain a list scalar"),
+        };
+
+        assert_eq!(items.len(), 2);
+        assert_eq!(
+            items[0],
+            Scalar {
+                value: ScalarType::Integer(42),
+                comment: Some("comment for item 1".to_string())
+            }
+        );
+        assert_eq!(
+            items[1],
+            Scalar {
+                value: ScalarType::Float(42.56),
+                comment: Some("comment for item 2".to_string())
+            }
+        );
 
         Ok(())
     }
@@ -336,35 +510,48 @@ mod tests {
     #[test]
     fn parse_scalar_list_with_flow_sequence() -> Result<()> {
         let document = parse("[1,2,3]")?.unwrap();
-        assert!(matches!(
-            document.root.value,
-            ScalarType::List(ref items) if items.len() == 3
-        ));
 
-        assert!(matches!(
-            document.root.value,
-            ScalarType::List(ref items) if items[0] == Scalar { value: ScalarType::Integer(1) }
-        ));
+        let items = match &document.root.value {
+            ScalarType::List(items) => items,
+            _ => panic!("root node should contain a list scalar"),
+        };
 
-        assert!(matches!(
-            document.root.value,
-            ScalarType::List(ref items) if items[1] == Scalar { value: ScalarType::Integer(2) }
-        ));
+        assert_eq!(items.len(), 3);
+        assert_eq!(
+            items[0],
+            Scalar {
+                value: ScalarType::Integer(1),
+                comment: None
+            }
+        );
+        assert_eq!(
+            items[1],
+            Scalar {
+                value: ScalarType::Integer(2),
+                comment: None
+            }
+        );
+        assert_eq!(
+            items[2],
+            Scalar {
+                value: ScalarType::Integer(3),
+                comment: None
+            }
+        );
 
-        assert!(matches!(
-            document.root.value,
-            ScalarType::List(ref items) if items[2] == Scalar { value: ScalarType::Integer(3) }
-        ));
         Ok(())
     }
 
     #[test]
     fn parse_scalar_list_with_empty_flow_sequence() -> Result<()> {
         let document = parse("[]")?.unwrap();
-        assert!(matches!(
-            document.root.value,
-            ScalarType::List(ref items) if items.len() == 0
-        ));
+
+        let items = match &document.root.value {
+            ScalarType::List(items) => items,
+            _ => panic!("root node should contain a list scalar"),
+        };
+
+        assert_eq!(items.len(), 0);
         Ok(())
     }
 
@@ -379,7 +566,43 @@ mod tests {
                 assert_eq!(
                     map[0].value,
                     Scalar {
-                        value: ScalarType::String("truman".to_string())
+                        value: ScalarType::String("truman".to_string()),
+                        comment: None,
+                    }
+                );
+            }
+            _ => panic!("root node should contain a map scalar"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_map_with_comments() -> Result<()> {
+        let yaml = r#"
+        # comment for x
+        x: 1
+        y: 2 # comment for y
+        "#;
+
+        let document = parse(yaml)?.unwrap();
+        match document.root.value {
+            ScalarType::Map(ref map) => {
+                assert_eq!(map.len(), 2);
+                assert_eq!(map[0].key, "x");
+                assert_eq!(
+                    map[0].value,
+                    Scalar {
+                        value: ScalarType::Integer(1),
+                        comment: Some("comment for x".to_string()),
+                    }
+                );
+                assert_eq!(map[1].key, "y");
+                assert_eq!(
+                    map[1].value,
+                    Scalar {
+                        value: ScalarType::Integer(2),
+                        comment: Some("comment for y".to_string()),
                     }
                 );
             }
@@ -400,7 +623,8 @@ mod tests {
                 assert_eq!(
                     map[0].value,
                     Scalar {
-                        value: ScalarType::Null
+                        value: ScalarType::Null,
+                        comment: None,
                     }
                 );
             }
@@ -420,14 +644,16 @@ mod tests {
                 assert_eq!(
                     map[0].value,
                     Scalar {
-                        value: ScalarType::Integer(1)
+                        value: ScalarType::Integer(1),
+                        comment: None,
                     }
                 );
                 assert_eq!(map[1].key, "y");
                 assert_eq!(
                     map[1].value,
                     Scalar {
-                        value: ScalarType::Integer(2)
+                        value: ScalarType::Integer(2),
+                        comment: None,
                     }
                 );
             }
@@ -458,19 +684,35 @@ mod tests {
                 assert_eq!(
                     map[0].value,
                     Scalar {
-                        value: ScalarType::Null
+                        value: ScalarType::Null,
+                        comment: None,
                     }
                 );
                 assert_eq!(map[1].key, "y");
                 assert_eq!(
                     map[1].value,
                     Scalar {
-                        value: ScalarType::Null
+                        value: ScalarType::Null,
+                        comment: None,
                     }
                 );
             }
             _ => panic!("root node should contain a map scalar"),
         }
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_with_preceding_and_inline_comment() -> Result<()> {
+        let yaml = r#"
+        # preceding comment
+        38 # inline comment
+        "#;
+
+        let document = parse(yaml)?.unwrap();
+        assert_eq!(document.root.value, ScalarType::Integer(38));
+        assert_eq!(document.root.comment, Some("inline comment".to_string()));
+
         Ok(())
     }
 }
