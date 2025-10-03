@@ -1,0 +1,151 @@
+name: ci
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "Cargo.*"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "Cargo.*"
+permissions:
+  contents: read
+jobs:
+  rustfmt:
+    runs-on: ubuntu-24.04
+    name: rustfmt / stable
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@c134e4c9e34bac6cab09cf239815f9339aaaf84e # v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
+        with:
+          name: purpleclay
+          authToken: "${{ secrets.GH_CACHIX }}"
+          skipPush: true
+          useDaemon: false
+
+      - name: Cargo Format
+        run: nix develop -c cargo fmt --check
+
+  clippy:
+    runs-on: ubuntu-24.04
+    name: clippy / stable
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@c134e4c9e34bac6cab09cf239815f9339aaaf84e # v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
+        with:
+          name: purpleclay
+          authToken: "${{ secrets.GH_CACHIX }}"
+          skipPush: true
+          useDaemon: false
+
+      - name: Cargo Clippy
+        run: nix develop -c cargo clippy -- -Dwarnings
+
+  typos:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@c134e4c9e34bac6cab09cf239815f9339aaaf84e # v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
+        with:
+          name: purpleclay
+          authToken: "${{ secrets.GH_CACHIX }}"
+          skipPush: true
+          useDaemon: false
+
+      - name: Run Typos
+        run: nix develop -c typos
+
+  test:
+    runs-on: ${{ matrix.os }}
+    name: test / ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@c134e4c9e34bac6cab09cf239815f9339aaaf84e # v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
+        with:
+          name: purpleclay
+          authToken: "${{ secrets.GH_CACHIX }}"
+          skipPush: true
+          useDaemon: false
+
+      - name: Run tests
+        run: nix develop -c cargo test
+
+  build:
+    runs-on: ${{ matrix.platform.runs-on }}
+    name: build / ${{ matrix.platform.name }}
+    strategy:
+      matrix:
+        platform:
+          - name: linux_x86_64_musl
+            runs-on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+            use-cross: true
+          - name: linux_aarch64_musl
+            runs-on: ubuntu-24.04
+            target: aarch64-unknown-linux-musl
+            use-cross: true
+          - name: darwin_x86_64
+            runs-on: macos-15
+            target: x86_64-apple-darwin
+            use-cross: false
+          - name: darwin_aarch64
+            runs-on: macos-15
+            target: aarch64-apple-darwin
+            use-cross: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Cache
+        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
+
+      - name: Build
+        uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # v1
+        with:
+          use-cross: ${{ matrix.platform.use-cross }}
+          command: build
+          args: --locked --release --target ${{ matrix.platform.target }}

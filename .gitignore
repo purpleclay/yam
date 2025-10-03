@@ -3,7 +3,7 @@
 
 !.gitignore
 !.zed/settings.json
-!CODEOWNERS
+!.github/**/*
 !CODE_OF_CONDUCT.md
 !LICENSE
 !README.md
