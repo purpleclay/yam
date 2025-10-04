@@ -2,7 +2,7 @@ mod markdown;
 mod parser;
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use std::{
     fs,
     io::{self, Read},
@@ -14,39 +14,35 @@ pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
+const LONG_ABOUT: &str = r#"A context-aware YAML to markdown document generator that parses YAML files
+and renders them as markdown tables."#;
+
 #[derive(Parser, Debug)]
-#[command(author, about, long_about = None, disable_version_flag = true)]
+#[command(
+    author,
+    about,
+    long_about = LONG_ABOUT,
+    disable_version_flag = true,
+    disable_help_subcommand = true
+)]
 struct Args {
+    /// Path to a YAML file to convert to markdown
+    ///
+    /// Use '-' to read from stdin (e.g., cat file.yaml | yam -)
     #[arg(value_name = "FILE")]
     file: Option<String>,
 
-    #[command(subcommand)]
-    command: Option<Commands>,
-}
-
-#[derive(Subcommand, Debug)]
-enum Commands {
     /// Print build time version information
-    Version {
-        /// Only print the version number
-        #[arg(short, long)]
-        short: bool,
-    },
+    #[arg(short = 'V', long)]
+    version: bool,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    match args.command {
-        Some(Commands::Version { short }) => {
-            if short {
-                print_version_short();
-            } else {
-                print_version_info();
-            }
-            return Ok(());
-        }
-        None => {}
+    if args.version {
+        print_version_info();
+        return Ok(());
     }
 
     let file = args.file.context("FILE argument is required")?;
@@ -67,10 +63,6 @@ fn main() -> Result<()> {
         println!("{}", markdown);
     }
     Ok(())
-}
-
-fn print_version_short() {
-    println!("{}", built_info::PKG_VERSION);
 }
 
 fn print_version_info() {

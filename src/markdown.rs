@@ -51,7 +51,7 @@ fn flatten_scalar(scalar: &Scalar, key: String, rows: &mut Vec<TableRow>) {
         ScalarType::List(list) => {
             for (index, item) in list.iter().enumerate() {
                 let new_key = format!("{}.{}", key, index);
-                flatten_scalar(&item, new_key, rows);
+                flatten_scalar(item, new_key, rows);
             }
         }
         _ => {

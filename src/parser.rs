@@ -53,7 +53,7 @@ impl<'a> YamlParser<'a> {
     }
 
     fn parse(&mut self, node: &Node) -> Result<Scalar, ParseError> {
-        self.parse_comments(&node);
+        self.parse_comments(node);
         self.parse_tree(node)
     }
 
@@ -78,10 +78,10 @@ impl<'a> YamlParser<'a> {
             return Some(comment.clone());
         }
 
-        if line_number > 0 {
-            if let Some(comment) = self.comments.get(&(line_number - 1)) {
-                return Some(comment.clone());
-            }
+        if line_number > 0
+            && let Some(comment) = self.comments.get(&(line_number - 1))
+        {
+            return Some(comment.clone());
         }
 
         None
