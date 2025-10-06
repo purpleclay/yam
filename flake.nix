@@ -32,6 +32,8 @@
         buildInputs = with pkgs; [
           alejandra
           nil
+          shellcheck
+          shfmt
           typos
         ];
 
