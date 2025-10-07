@@ -17,3 +17,11 @@ Download a specific version using the `-v` flag. The script uses `sudo` by defau
 sh -c "$(curl https://raw.githubusercontent.com/purpleclay/yam/main/scripts/install)" \
   -- -v 0.1.0 --no-sudo -d ./bin
 ```
+
+## Run with Nix
+
+If you have nix installed, you can run the binary directly from the GitHub repository:
+
+```sh
+nix run github:purpleclay/yam -- --help
+```
