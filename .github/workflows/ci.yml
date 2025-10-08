@@ -118,19 +118,19 @@ jobs:
           - name: linux_x86_64_musl
             runs-on: ubuntu-24.04
             target: x86_64-unknown-linux-musl
-            use-cross: true
+            use-zigbuild: true
           - name: linux_aarch64_musl
             runs-on: ubuntu-24.04
             target: aarch64-unknown-linux-musl
-            use-cross: true
+            use-zigbuild: true
           - name: darwin_x86_64
             runs-on: macos-15
             target: x86_64-apple-darwin
-            use-cross: false
+            use-zigbuild: false
           - name: darwin_aarch64
             runs-on: macos-15
             target: aarch64-apple-darwin
-            use-cross: false
+            use-zigbuild: false
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
@@ -140,12 +140,23 @@ jobs:
         with:
           targets: ${{ matrix.platform.target }}
 
+      - name: Setup Zig
+        if: matrix.platform.use-zigbuild
+        uses: goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406 # v2
+        with:
+          version: 0.13.0
+
+      - name: Install cargo-zigbuild
+        if: ${{ matrix.platform.use-zigbuild }}
+        run: cargo install cargo-zigbuild
+
       - name: Cache
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
 
-      - name: Build
-        uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # v1
-        with:
-          use-cross: ${{ matrix.platform.use-cross }}
-          command: build
-          args: --locked --release --target ${{ matrix.platform.target }}
+      - name: Build with zigbuild
+        if: ${{ matrix.platform.use-zigbuild }}
+        run: cargo zigbuild --locked --release --target ${{ matrix.platform.target }}
+
+      - name: Build with cargo
+        if: ${{ !matrix.platform.use-zigbuild }}
+        run: cargo build --locked --release --target ${{ matrix.platform.target }}

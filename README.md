@@ -25,3 +25,17 @@ If you have nix installed, you can run the binary directly from the GitHub repos
 ```sh
 nix run github:purpleclay/yam -- --help
 ```
+
+## Benchmarks
+
+To run the benchmarks:
+
+```sh
+cargo bench
+```
+
+Benchmarks where run on an Apple M4 Pro (12 cores) with 24GB of RAM:
+
+| Benchmark | Time | Throughput |
+|-----------|------|------------|
+| Parse Helm values (56kb, 1365 lines) | 1.37 ms | ~41 MB/s |

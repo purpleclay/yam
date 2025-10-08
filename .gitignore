@@ -19,6 +19,8 @@
 !Cargo.lock
 !src/*.rs
 !build.rs
+!benches/*.rs
+!benches/fixtures/*.yaml
 target/**/*
 
 # Recurse through sub-directories applying the same patterns

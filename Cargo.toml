@@ -17,3 +17,10 @@ tree-sitter-yaml = "0.7.1"
 
 [build-dependencies]
 built = { version = "0.8.0", features = ["git2", "semver", "chrono"] }
+
+[dev-dependencies]
+criterion = { version = "0.7.0", features = ["html_reports"] }
+
+[[bench]]
+name = "parsing"
+harness = false
