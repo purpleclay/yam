@@ -5,6 +5,9 @@ edition = "2024"
 description = "Context-aware YAML to markdown document generator"
 license = "MIT"
 
+[profile.release]
+strip = "debuginfo"
+
 [dependencies]
 anyhow = "1.0.99"
 clap = { version = "4.5.47", features = ["derive"] }
