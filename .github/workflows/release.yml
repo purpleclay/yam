@@ -125,9 +125,8 @@ jobs:
           find ${{ steps.download.outputs.download-path }} -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} ~/archives/ \;
 
       - name: Create Release
-        uses: ncipollo/release-action@b7eabc95ff50cbeeedec83973935c8f306dfcd0b # v1.20.0
+        uses: softprops/action-gh-release@e7a8f85e1c67a31e6ac94f944dfb257c0f6d6537 # v2.2.0
         with:
-          artifacts: "~/archives/*"
-          makeLatest: true
-          name: ${{ github.ref_name }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          files: ~/archives/*
+          generate_release_notes: true
+          make_latest: true
