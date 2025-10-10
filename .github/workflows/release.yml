@@ -125,7 +125,7 @@ jobs:
           find ${{ steps.download.outputs.download-path }} -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} ~/archives/ \;
 
       - name: Create Release
-        uses: softprops/action-gh-release@e7a8f85e1c67a31e6ac94f944dfb257c0f6d6537 # v2.2.0
+        uses: softprops/action-gh-release@aec2ec56f94eb8180ceec724245f64ef008b89f5 # v2.4.0
         with:
           files: ~/archives/*
           generate_release_notes: true
