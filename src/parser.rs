@@ -58,17 +58,36 @@ impl<'a> YamlParser<'a> {
     }
 
     fn parse_comments(&mut self, node: &Node) {
-        if node.kind() == "comment" {
-            let line = node.start_position().row;
-            let text = &self.source[node.byte_range()];
-            self.comments
-                .insert(line, text.trim_start_matches('#').trim().to_string());
-        }
-
         let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            self.parse_comments(&child);
+        let mut children = node.children(&mut cursor).peekable();
+
+        while let Some(child) = children.next() {
+            if child.kind() == "comment" {
+                let mut comment_parts = vec![self.extract_comment_text(&child)];
+                let mut last_line = child.start_position().row;
+
+                while let Some(next) = children.peek() {
+                    if next.kind() == "comment" {
+                        let next_child = children.next().unwrap();
+                        last_line = next_child.start_position().row;
+                        comment_parts.push(self.extract_comment_text(&next_child));
+                    } else {
+                        break;
+                    }
+                }
+
+                self.comments.insert(last_line, comment_parts.join(" "));
+            } else {
+                self.parse_comments(&child);
+            }
         }
+    }
+
+    fn extract_comment_text(&self, node: &Node) -> String {
+        self.source[node.byte_range()]
+            .trim_start_matches('#')
+            .trim()
+            .to_string()
     }
 
     fn find_comment_for_node(&self, node: &Node) -> Option<String> {
@@ -712,6 +731,53 @@ mod tests {
         let document = parse(yaml)?.unwrap();
         assert_eq!(document.root.value, ScalarType::Integer(38));
         assert_eq!(document.root.comment, Some("inline comment".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_with_multiline_comment() -> Result<()> {
+        let yaml = r#"
+        # this is a comment that will be spread over
+        # multiple lines
+        22
+        "#;
+
+        let document = parse(yaml)?.unwrap();
+        assert_eq!(document.root.value, ScalarType::Integer(22));
+        assert_eq!(
+            document.root.comment,
+            Some("this is a comment that will be spread over multiple lines".to_string())
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_map_with_multiline_comment() -> Result<()> {
+        let yaml = r#"
+        image:
+          # this is a multiline comment
+          # for a key within a map
+          registry: docker.io
+        "#;
+
+        let document = parse(yaml)?.unwrap();
+        match document.root.value {
+            ScalarType::Map(ref map) => {
+                assert_eq!(map.len(), 1);
+                match map[0].value.value {
+                    ScalarType::Map(ref map) => {
+                        assert_eq!(map.len(), 1);
+                        assert_eq!(
+                            map[0].value.comment,
+                            Some("this is a multiline comment for a key within a map".to_string())
+                        );
+                    }
+                    _ => panic!("child node should contain a map scalar"),
+                }
+            }
+            _ => panic!("root node should contain a map scalar"),
+        }
 
         Ok(())
     }
