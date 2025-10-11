@@ -116,17 +116,12 @@ jobs:
         id: download
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
-          path: /tmp/archives
-
-      - name: Move Archives
-        shell: bash
-        run: |
-          mkdir -p ~/archives
-          find ${{ steps.download.outputs.download-path }} -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} ~/archives/ \;
+          path: archives
+          merge-multiple: true
 
       - name: Create Release
         uses: softprops/action-gh-release@aec2ec56f94eb8180ceec724245f64ef008b89f5 # v2.4.0
         with:
-          files: ~/archives/*
+          files: ${{ steps.download.outputs.download-path }}/*
           generate_release_notes: true
           make_latest: true
