@@ -158,7 +158,15 @@ impl<'a> YamlParser<'a> {
                     comment: None,
                 })
             }
-            _ => Err(anyhow!("unexpected node kind {}", node.kind())),
+            _ => {
+                let pos = node.start_position();
+                Err(anyhow!(
+                    "unexpected node kind {} at line {}, column {}",
+                    node.kind(),
+                    pos.row + 1,
+                    pos.column + 1
+                ))
+            }
         }
     }
 
@@ -178,9 +186,14 @@ impl<'a> YamlParser<'a> {
         match scalar.kind() {
             "integer_scalar" => {
                 let text = &self.source[scalar.byte_range()];
-                let value = text
-                    .parse::<i64>()
-                    .map_err(|_| anyhow!("invalid integer"))?;
+                let value = text.parse::<i64>().map_err(|_| {
+                    let pos = scalar.start_position();
+                    anyhow!(
+                        "invalid integer at line {}, column {}",
+                        pos.row + 1,
+                        pos.column + 1
+                    )
+                })?;
                 Ok(Scalar {
                     value: ScalarType::Integer(value),
                     comment: None,
@@ -188,7 +201,14 @@ impl<'a> YamlParser<'a> {
             }
             "float_scalar" => {
                 let text = &self.source[scalar.byte_range()];
-                let value = text.parse::<f64>().map_err(|_| anyhow!("invalid float"))?;
+                let value = text.parse::<f64>().map_err(|_| {
+                    let pos = scalar.start_position();
+                    anyhow!(
+                        "invalid float at line {}, column {}",
+                        pos.row + 1,
+                        pos.column + 1
+                    )
+                })?;
                 Ok(Scalar {
                     value: ScalarType::Float(value),
                     comment: None,
@@ -196,9 +216,14 @@ impl<'a> YamlParser<'a> {
             }
             "boolean_scalar" => {
                 let text = &self.source[scalar.byte_range()];
-                let value = text
-                    .parse::<bool>()
-                    .map_err(|_| anyhow!("invalid boolean"))?;
+                let value = text.parse::<bool>().map_err(|_| {
+                    let pos = scalar.start_position();
+                    anyhow!(
+                        "invalid boolean at line {}, column {}",
+                        pos.row + 1,
+                        pos.column + 1
+                    )
+                })?;
                 Ok(Scalar {
                     value: ScalarType::Boolean(value),
                     comment: None,
@@ -215,7 +240,15 @@ impl<'a> YamlParser<'a> {
                 value: ScalarType::Null,
                 comment: None,
             }),
-            _ => Err(anyhow!("unexpected node kind {}", scalar.kind())),
+            _ => {
+                let pos = scalar.start_position();
+                Err(anyhow!(
+                    "unexpected node kind {} at line {}, column {}",
+                    scalar.kind(),
+                    pos.row + 1,
+                    pos.column + 1
+                ))
+            }
         }
     }
 
