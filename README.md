@@ -36,6 +36,14 @@ cargo bench
 
 Benchmarks where run on an Apple M4 Pro (12 cores) with 24GB of RAM:
 
-| Benchmark | Time | Throughput |
-|-----------|------|------------|
-| Parse Helm values (56kb, 1365 lines) | 1.37 ms | ~41 MB/s |
+| Fixture      | Size   | Lines | Mean Time | Throughput (MB/s) | Throughput (lines/s) |
+| ------------ | ------ | ----- | --------- | ----------------- | -------------------- |
+| external-dns | 50 KB  | 1,206 | ~1.32 ms  | ~37.09 MB/s       | ~913,636             |
+| minio        | 76 KB  | 1,749 | ~1.82 ms  | ~40.79 MB/s       | ~958,791             |
+| redis        | 102 KB | 2,347 | ~2.62 ms  | ~38.08 MB/s       | ~895,229             |
+
+To view the benchmark report:
+
+```sh
+open target/criterion/report/index.html
+```

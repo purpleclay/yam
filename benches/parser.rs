@@ -3,15 +3,12 @@ use std::{fs, hint::black_box, path::Path};
 
 fn parse_helm_values(c: &mut Criterion) {
     let fixtures = vec![
-        // (
-        //     "benches/fixtures/helm/external-dns.yaml",
-        //     "external_dns_values",
-        // ),
-        ("benches/fixtures/helm/minio.yaml", "minio_values"),
-        // ("benches/fixtures/helm/redis.yaml", "redis_values"),
+        ("benches/fixtures/helm/external-dns.yaml", "external_dns"),
+        ("benches/fixtures/helm/minio.yaml", "minio"),
+        ("benches/fixtures/helm/redis.yaml", "redis"),
     ];
 
-    let mut group = c.benchmark_group("parse_yaml_files");
+    let mut group = c.benchmark_group("parse_helm_values");
 
     for (file_path, name) in &fixtures {
         if !Path::new(file_path).exists() {
@@ -44,7 +41,7 @@ fn parse_helm_values(c: &mut Criterion) {
 
 criterion_group! {
     name = benches;
-    config = Criterion::default().measurement_time(std::time::Duration::from_secs(10));
+    config = Criterion::default().measurement_time(std::time::Duration::from_secs(15));
     targets = parse_helm_values
 }
 criterion_main!(benches);
