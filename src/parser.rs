@@ -137,6 +137,7 @@ impl<'a> YamlParser<'a> {
             }
             "plain_scalar" => self.parse_plain_scalar(node),
             "single_quote_scalar" | "double_quote_scalar" => self.parse_quoted_scalar(node),
+            "block_scalar" => self.parse_block_scalar(node),
             "block_sequence" => {
                 let scalar_items = self.parse_block_sequence(node)?;
                 Ok(Scalar {
@@ -176,6 +177,23 @@ impl<'a> YamlParser<'a> {
             value: ScalarType::String(text[1..text.len() - 1].to_string()),
             comment: None,
         })
+    }
+
+    fn parse_block_scalar(&self, node: Node) -> Result<Scalar> {
+        let text = &self.source[node.byte_range()];
+
+        if let Some(newline_pos) = text.find('\n') {
+            let content = &text[newline_pos + 1..];
+            Ok(Scalar {
+                value: ScalarType::String(content.to_string()),
+                comment: None,
+            })
+        } else {
+            Ok(Scalar {
+                value: ScalarType::String(String::new()),
+                comment: None,
+            })
+        }
     }
 
     fn parse_plain_scalar(&self, node: Node) -> Result<Scalar> {
@@ -807,6 +825,82 @@ mod tests {
                         );
                     }
                     _ => panic!("child node should contain a map scalar"),
+                }
+            }
+            _ => panic!("root node should contain a map scalar"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_block_scalar_literal() -> Result<()> {
+        let yaml = r#"key: |
+  this is a multiline
+  string spread over multiple lines"#;
+
+        let document = parse(yaml)?.unwrap();
+        match document.root.value {
+            ScalarType::Map(ref map) => {
+                assert_eq!(map.len(), 1);
+                assert_eq!(map[0].key, "key");
+                match &map[0].value.value {
+                    ScalarType::String(s) => {
+                        assert!(s.contains("this is a multiline"));
+                        assert!(s.contains("string spread over multiple lines"));
+                    }
+                    _ => panic!("value should be a string"),
+                }
+            }
+            _ => panic!("root node should contain a map scalar"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_block_scalar_with_chomping() -> Result<()> {
+        let yaml = r#"key: |+2
+  this is a multiline
+  string spread over multiple lines
+"#;
+
+        let document = parse(yaml)?.unwrap();
+        match document.root.value {
+            ScalarType::Map(ref map) => {
+                assert_eq!(map.len(), 1);
+                assert_eq!(map[0].key, "key");
+                match &map[0].value.value {
+                    ScalarType::String(s) => {
+                        assert!(s.contains("this is a multiline"));
+                        assert!(s.contains("string spread over multiple lines"));
+                    }
+                    _ => panic!("value should be a string"),
+                }
+            }
+            _ => panic!("root node should contain a map scalar"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_block_scalar_folded() -> Result<()> {
+        let yaml = r#"key: >
+  this is a multiline
+  string that will be folded"#;
+
+        let document = parse(yaml)?.unwrap();
+        match document.root.value {
+            ScalarType::Map(ref map) => {
+                assert_eq!(map.len(), 1);
+                assert_eq!(map[0].key, "key");
+                match &map[0].value.value {
+                    ScalarType::String(s) => {
+                        assert!(s.contains("this is a multiline"));
+                        assert!(s.contains("string that will be folded"));
+                    }
+                    _ => panic!("value should be a string"),
                 }
             }
             _ => panic!("root node should contain a map scalar"),
