@@ -204,14 +204,41 @@ impl<'a> YamlParser<'a> {
         match scalar.kind() {
             "integer_scalar" => {
                 let text = &self.source[scalar.byte_range()];
-                let value = text.parse::<i64>().map_err(|_| {
-                    let pos = scalar.start_position();
-                    anyhow!(
-                        "invalid integer at line {}, column {}",
-                        pos.row + 1,
-                        pos.column + 1
-                    )
-                })?;
+                let pos = scalar.start_position();
+
+                let parse_int = |num_str: &str, radix: u32, format: &str| {
+                    i64::from_str_radix(num_str, radix).map_err(|_| {
+                        anyhow!(
+                            "invalid {} integer at line {}, column {}",
+                            format,
+                            pos.row + 1,
+                            pos.column + 1
+                        )
+                    })
+                };
+
+                let value = if text.len() > 2 {
+                    match &text[..2].to_ascii_lowercase()[..] {
+                        "0x" => parse_int(&text[2..], 16, "hexadecimal")?,
+                        "0o" => parse_int(&text[2..], 8, "octal")?,
+                        _ => text.parse::<i64>().map_err(|_| {
+                            anyhow!(
+                                "invalid integer at line {}, column {}",
+                                pos.row + 1,
+                                pos.column + 1
+                            )
+                        })?,
+                    }
+                } else {
+                    text.parse::<i64>().map_err(|_| {
+                        anyhow!(
+                            "invalid integer at line {}, column {}",
+                            pos.row + 1,
+                            pos.column + 1
+                        )
+                    })?
+                };
+
                 Ok(Scalar {
                     value: ScalarType::Integer(value),
                     comment: None,
@@ -381,6 +408,30 @@ mod tests {
         let document = parse("42 # comment")?.unwrap();
         assert_eq!(document.root.value, ScalarType::Integer(42));
         assert_eq!(document.root.comment, Some("comment".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_integer_negative() -> Result<()> {
+        let document = parse("-42")?.unwrap();
+        assert_eq!(document.root.value, ScalarType::Integer(-42));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_integer_octal() -> Result<()> {
+        let document = parse("0o10")?.unwrap();
+        assert_eq!(document.root.value, ScalarType::Integer(8));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_integer_hexadecimal() -> Result<()> {
+        let document = parse("0x2A")?.unwrap();
+        assert_eq!(document.root.value, ScalarType::Integer(42));
 
         Ok(())
     }
