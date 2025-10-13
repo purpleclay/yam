@@ -219,14 +219,20 @@ impl<'a> YamlParser<'a> {
             }
             "float_scalar" => {
                 let text = &self.source[scalar.byte_range()];
-                let value = text.parse::<f64>().map_err(|_| {
-                    let pos = scalar.start_position();
-                    anyhow!(
-                        "invalid float at line {}, column {}",
-                        pos.row + 1,
-                        pos.column + 1
-                    )
-                })?;
+                let value = match text.to_lowercase().as_str() {
+                    ".inf" => f64::INFINITY,
+                    "-.inf" => f64::NEG_INFINITY,
+                    ".nan" => f64::NAN,
+                    _ => text.parse::<f64>().map_err(|_| {
+                        let pos = scalar.start_position();
+                        anyhow!(
+                            "invalid float at line {}, column {}",
+                            pos.row + 1,
+                            pos.column + 1
+                        )
+                    })?,
+                };
+
                 Ok(Scalar {
                     value: ScalarType::Float(value),
                     comment: None,
@@ -396,6 +402,63 @@ mod tests {
         let document = parse(yaml)?.unwrap();
         assert_eq!(document.root.value, ScalarType::Float(42.56));
         assert_eq!(document.root.comment, Some("comment".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_float_negative() -> Result<()> {
+        let document = parse("-42.56")?.unwrap();
+        assert_eq!(document.root.value, ScalarType::Float(-42.56));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_float_scientific_notation() -> Result<()> {
+        let document = parse("1.23e+2")?.unwrap();
+        assert_eq!(document.root.value, ScalarType::Float(123.0));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_float_scientific_notation_negative() -> Result<()> {
+        let document = parse("-1.23e+2")?.unwrap();
+        assert_eq!(document.root.value, ScalarType::Float(-123.0));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_float_positive_infinity() -> Result<()> {
+        let document = parse(".inf")?.unwrap();
+        match document.root.value {
+            ScalarType::Float(f) => assert!(f.is_infinite() && f.is_sign_positive()),
+            _ => panic!("expected positive infinity float"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_float_negative_infinity() -> Result<()> {
+        let document = parse("-.inf")?.unwrap();
+        match document.root.value {
+            ScalarType::Float(f) => assert!(f.is_infinite() && f.is_sign_negative()),
+            _ => panic!("expected negative infinity float"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_float_nan() -> Result<()> {
+        let document = parse(".nan")?.unwrap();
+        match document.root.value {
+            ScalarType::Float(f) => assert!(f.is_nan()),
+            _ => panic!("expected NaN float"),
+        }
 
         Ok(())
     }
