@@ -579,6 +579,167 @@ mod tests {
     }
 
     #[test]
+    fn parse_scalar_empty_string_double_quoted() -> Result<()> {
+        let document = parse(r#""""#)?.unwrap();
+        assert_eq!(document.root.value, ScalarType::String("".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_empty_string_single_quoted() -> Result<()> {
+        let document = parse("''")?.unwrap();
+        assert_eq!(document.root.value, ScalarType::String("".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_string_with_escape_newline() -> Result<()> {
+        let document = parse(r#""hello\nworld""#)?.unwrap();
+        assert_eq!(
+            document.root.value,
+            ScalarType::String("hello\\nworld".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_string_with_escape_tab() -> Result<()> {
+        let document = parse(r#""hello\tworld""#)?.unwrap();
+        assert_eq!(
+            document.root.value,
+            ScalarType::String("hello\\tworld".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_string_with_escape_backslash() -> Result<()> {
+        let document = parse(r#""hello\\world""#)?.unwrap();
+        assert_eq!(
+            document.root.value,
+            ScalarType::String("hello\\\\world".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_string_with_escape_quote() -> Result<()> {
+        let document = parse(r#""hello\"world""#)?.unwrap();
+        assert_eq!(
+            document.root.value,
+            ScalarType::String("hello\\\"world".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_string_with_escape_carriage_return() -> Result<()> {
+        let document = parse(r#""hello\rworld""#)?.unwrap();
+        assert_eq!(
+            document.root.value,
+            ScalarType::String("hello\\rworld".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_string_with_escape_null() -> Result<()> {
+        let document = parse(r#""hello\0world""#)?.unwrap();
+        assert_eq!(
+            document.root.value,
+            ScalarType::String("hello\\0world".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_string_with_unicode_escape_short() -> Result<()> {
+        let document = parse(r#""\u0041""#)?.unwrap();
+        assert_eq!(
+            document.root.value,
+            ScalarType::String("\\u0041".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_string_with_unicode_escape_long() -> Result<()> {
+        let document = parse(r#""\U00000041""#)?.unwrap();
+        assert_eq!(
+            document.root.value,
+            ScalarType::String("\\U00000041".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_string_with_unicode_emoji() -> Result<()> {
+        let document = parse(r#""\U0001F600""#)?.unwrap();
+        assert_eq!(
+            document.root.value,
+            ScalarType::String("\\U0001F600".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_string_single_quote_escape() -> Result<()> {
+        let document = parse("'it''s'")?.unwrap();
+        assert_eq!(document.root.value, ScalarType::String("it''s".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_string_unquoted() -> Result<()> {
+        let document = parse("hello world")?.unwrap();
+        assert_eq!(
+            document.root.value,
+            ScalarType::String("hello world".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_string_unquoted_with_colon() -> Result<()> {
+        let document = parse("http://example.com")?.unwrap();
+        assert_eq!(
+            document.root.value,
+            ScalarType::String("http://example.com".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_string_whitespace_double_quoted() -> Result<()> {
+        let document = parse(r#""   ""#)?.unwrap();
+        assert_eq!(document.root.value, ScalarType::String("   ".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_scalar_string_whitespace_single_quoted() -> Result<()> {
+        let document = parse("'   '")?.unwrap();
+        assert_eq!(document.root.value, ScalarType::String("   ".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
     fn parse_scalar_null() -> Result<()> {
         let document = parse("null")?.unwrap();
         assert_eq!(document.root.value, ScalarType::Null);
