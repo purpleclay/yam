@@ -1,7 +1,6 @@
+use crate::parser::{Document, Scalar, ScalarType};
 use anyhow::{Context, Result};
 use serde::Serialize;
-
-use crate::parser::{Document, Scalar, ScalarType};
 
 pub const TEMPLATE: &str = r#"
 | Name | Value | Description |
@@ -18,7 +17,7 @@ struct TableRow {
     description: String,
 }
 
-pub fn render_markdown(document: &Document) -> Result<String> {
+pub fn render_markdown(document: &Document<'_>) -> Result<String> {
     let mut tera = tera::Tera::default();
     tera.add_raw_template("main", TEMPLATE)
         .context("failed to parse template")?;
@@ -30,18 +29,18 @@ pub fn render_markdown(document: &Document) -> Result<String> {
         .context("failed to render template")
 }
 
-fn flatten_document(document: &Document) -> Vec<TableRow> {
+fn flatten_document(document: &Document<'_>) -> Vec<TableRow> {
     let mut rows = Vec::new();
     flatten_scalar(&document.root, String::new(), &mut rows);
     rows
 }
 
-fn flatten_scalar(scalar: &Scalar, key: String, rows: &mut Vec<TableRow>) {
+fn flatten_scalar(scalar: &Scalar<'_>, key: String, rows: &mut Vec<TableRow>) {
     match &scalar.value {
         ScalarType::Map(map) => {
             for entry in map {
                 let new_key = if key.is_empty() {
-                    entry.key.clone()
+                    entry.key.to_string() // Convert &str to String
                 } else {
                     format!("{}.{}", key, entry.key)
                 };
@@ -64,9 +63,9 @@ fn flatten_scalar(scalar: &Scalar, key: String, rows: &mut Vec<TableRow>) {
     }
 }
 
-fn format_scalar_value(value: &ScalarType) -> String {
+fn format_scalar_value(value: &ScalarType<'_>) -> String {
     match value {
-        ScalarType::String(s) => s.clone(),
+        ScalarType::String(s) => s.to_string(), // Convert &str to String
         ScalarType::Integer(n) => n.to_string(),
         ScalarType::Float(n) => n.to_string(),
         ScalarType::Boolean(b) => b.to_string(),
