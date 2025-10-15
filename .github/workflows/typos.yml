@@ -1,22 +1,27 @@
-name: nsv
+name: typos
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  nsv:
+  typos:
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
+    if: github.actor != 'renovate[bot]'
+    name: check spelling
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GH_NSV }}
 
       - name: Install Nix
         uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801 # v31
@@ -31,15 +36,5 @@ jobs:
           skipPush: true
           useDaemon: false
 
-      - name: GPG Import
-        env:
-          # skipcq: SCT-A000
-          GPG_PRIVATE_KEY: "${{ secrets.GPG_PRIVATE_KEY }}"
-          GPG_PASSPHRASE: "${{ secrets.GPG_PASSPHRASE }}"
-        run: nix run github:purpleclay/gpg-import
-
-      - name: Tag
-        env:
-          # renovate: datasource=github-tags depName=purpleclay/nsv
-          NSV_VERSION: "v0.12.2"
-        run: nix run github:purpleclay/nsv/${NSV_VERSION} -- tag --hook "./scripts/patch-cargo-version.sh" --show
+      - name: Run Typos
+        run: nix develop -c typos
