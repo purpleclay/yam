@@ -38,9 +38,9 @@ Benchmarks where run on an Apple M4 Pro (12 cores) with 24GB of RAM:
 
 | Fixture      | Size   | Lines | Mean Time | Throughput (MB/s) | Throughput (lines/s) |
 | ------------ | ------ | ----- | --------- | ----------------- | -------------------- |
-| external-dns | 50 KB  | 1,206 | ~1.32 ms  | ~37.09 MB/s       | ~913,636             |
-| minio        | 76 KB  | 1,749 | ~1.82 ms  | ~40.79 MB/s       | ~958,791             |
-| redis        | 102 KB | 2,347 | ~2.62 ms  | ~38.08 MB/s       | ~895,229             |
+| external-dns | 50 KB  | 1,206 | ~1.24 ms  | ~40.40 MB/s       | ~974,340             |
+| minio        | 76 KB  | 1,749 | ~1.71 ms  | ~44.34 MB/s       | ~1,020,415           |
+| redis        | 102 KB | 2,347 | ~2.46 ms  | ~41.44 MB/s       | ~953,570             |
 
 To view the benchmark report:
 

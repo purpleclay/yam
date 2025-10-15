@@ -4,31 +4,31 @@ use anyhow::{Context, Result, anyhow};
 use tree_sitter::{Node, Parser};
 
 #[derive(Debug)]
-pub struct Document {
-    pub root: Scalar,
+pub struct Document<'a> {
+    pub root: Scalar<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Scalar {
-    pub value: ScalarType,
+pub struct Scalar<'a> {
+    pub value: ScalarType<'a>,
     pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ScalarType {
+pub enum ScalarType<'a> {
     Null,
-    String(String),
+    String(&'a str),
     Integer(i64),
     Float(f64),
     Boolean(bool),
-    List(Vec<Scalar>),
-    Map(Vec<MapItem>),
+    List(Vec<Scalar<'a>>),
+    Map(Vec<MapItem<'a>>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct MapItem {
-    pub key: String,
-    pub value: Scalar,
+pub struct MapItem<'a> {
+    pub key: &'a str,
+    pub value: Scalar<'a>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -52,7 +52,7 @@ impl<'a> YamlParser<'a> {
         }
     }
 
-    fn parse(&mut self, node: &Node) -> Result<Scalar, ParseError> {
+    fn parse(&mut self, node: &Node) -> Result<Scalar<'a>, ParseError> {
         self.parse_comments(node);
         self.parse_tree(node)
     }
@@ -76,18 +76,17 @@ impl<'a> YamlParser<'a> {
                     }
                 }
 
-                self.comments.insert(last_line, comment_parts.join(" "));
+                let joined_comment = comment_parts.join(" ");
+                self.comments.insert(last_line, joined_comment);
             } else {
                 self.parse_comments(&child);
             }
         }
     }
 
-    fn extract_comment_text(&self, node: &Node) -> String {
-        self.source[node.byte_range()]
-            .trim_start_matches('#')
-            .trim()
-            .to_string()
+    fn extract_comment_text(&self, node: &Node) -> &'a str {
+        let text = &self.source[node.byte_range()];
+        text.trim_start_matches('#').trim()
     }
 
     fn find_comment_for_node(&self, node: &Node) -> Option<String> {
@@ -106,7 +105,7 @@ impl<'a> YamlParser<'a> {
         None
     }
 
-    fn parse_tree(&self, node: &Node) -> Result<Scalar, ParseError> {
+    fn parse_tree(&self, node: &Node) -> Result<Scalar<'a>, ParseError> {
         let mut cursor = node.walk();
 
         for child in node.children(&mut cursor) {
@@ -127,7 +126,7 @@ impl<'a> YamlParser<'a> {
         Err(ParseError::EmptyDocument)
     }
 
-    fn parse_value(&self, node: Node) -> Result<Scalar> {
+    fn parse_value(&self, node: Node) -> Result<Scalar<'a>> {
         match node.kind() {
             "flow_node" | "block_node" => {
                 let value = node
@@ -171,32 +170,32 @@ impl<'a> YamlParser<'a> {
         }
     }
 
-    fn parse_quoted_scalar(&self, node: Node) -> Result<Scalar> {
+    fn parse_quoted_scalar(&self, node: Node) -> Result<Scalar<'a>> {
         let text = &self.source[node.byte_range()];
         Ok(Scalar {
-            value: ScalarType::String(text[1..text.len() - 1].to_string()),
+            value: ScalarType::String(&text[1..text.len() - 1]),
             comment: None,
         })
     }
 
-    fn parse_block_scalar(&self, node: Node) -> Result<Scalar> {
+    fn parse_block_scalar(&self, node: Node) -> Result<Scalar<'a>> {
         let text = &self.source[node.byte_range()];
 
         if let Some(newline_pos) = text.find('\n') {
             let content = &text[newline_pos + 1..];
             Ok(Scalar {
-                value: ScalarType::String(content.to_string()),
+                value: ScalarType::String(content),
                 comment: None,
             })
         } else {
             Ok(Scalar {
-                value: ScalarType::String(String::new()),
+                value: ScalarType::String(""),
                 comment: None,
             })
         }
     }
 
-    fn parse_plain_scalar(&self, node: Node) -> Result<Scalar> {
+    fn parse_plain_scalar(&self, node: Node) -> Result<Scalar<'a>> {
         let scalar = node
             .child(0)
             .ok_or_else(|| anyhow!("should have a child"))?;
@@ -283,7 +282,7 @@ impl<'a> YamlParser<'a> {
             "string_scalar" => {
                 let text = &self.source[scalar.byte_range()];
                 Ok(Scalar {
-                    value: ScalarType::String(text.to_string()),
+                    value: ScalarType::String(text),
                     comment: None,
                 })
             }
@@ -303,7 +302,7 @@ impl<'a> YamlParser<'a> {
         }
     }
 
-    fn parse_block_sequence(&self, node: Node) -> Result<Vec<Scalar>, ParseError> {
+    fn parse_block_sequence(&self, node: Node) -> Result<Vec<Scalar<'a>>, ParseError> {
         let mut cursor = node.walk();
         node.children(&mut cursor)
             .filter(|child| child.kind() == "block_sequence_item")
@@ -311,7 +310,7 @@ impl<'a> YamlParser<'a> {
             .collect()
     }
 
-    fn parse_flow_sequence(&self, node: Node) -> Result<Vec<Scalar>, ParseError> {
+    fn parse_flow_sequence(&self, node: Node) -> Result<Vec<Scalar<'a>>, ParseError> {
         let mut cursor = node.walk();
         node.children(&mut cursor)
             .filter(|child| child.kind() == "flow_node")
@@ -319,7 +318,7 @@ impl<'a> YamlParser<'a> {
             .collect()
     }
 
-    fn parse_mapping(&self, node: Node) -> Result<Vec<MapItem>> {
+    fn parse_mapping(&self, node: Node) -> Result<Vec<MapItem<'a>>> {
         let mut cursor = node.walk();
         let mut items = Vec::new();
 
@@ -329,7 +328,7 @@ impl<'a> YamlParser<'a> {
                     let key_node = child
                         .child_by_field_name("key")
                         .ok_or_else(|| anyhow!("mandatory map key is missing"))?;
-                    let key = self.parse_key_as_string(&key_node)?;
+                    let key = self.parse_key_as_str(&key_node)?;
 
                     let value = match child.child_by_field_name("value") {
                         Some(value_node) => self.parse_tree(&value_node)?,
@@ -341,7 +340,7 @@ impl<'a> YamlParser<'a> {
                     items.push(MapItem { key, value });
                 }
                 "flow_node" => {
-                    let key = self.parse_key_as_string(&child)?;
+                    let key = self.parse_key_as_str(&child)?;
                     let value = Scalar {
                         value: ScalarType::Null,
                         comment: None,
@@ -355,19 +354,32 @@ impl<'a> YamlParser<'a> {
         Ok(items)
     }
 
-    fn parse_key_as_string(&self, node: &Node) -> Result<String> {
-        let scalar = self.parse_tree(node)?;
-        match scalar.value {
-            ScalarType::String(s) => Ok(s),
-            ScalarType::Integer(i) => Ok(i.to_string()),
-            ScalarType::Float(f) => Ok(f.to_string()),
-            ScalarType::Boolean(b) => Ok(b.to_string()),
-            _ => Err(anyhow!("complex types cannot be used as map keys")),
+    fn parse_key_as_str(&self, node: &Node) -> Result<&'a str> {
+        match node.kind() {
+            "flow_node" | "block_node" => {
+                if let Some(child) = node.child(0) {
+                    self.parse_key_as_str(&child)
+                } else {
+                    Err(anyhow!("expected child node"))
+                }
+            }
+            "plain_scalar" => {
+                if let Some(child) = node.child(0) {
+                    Ok(&self.source[child.byte_range()])
+                } else {
+                    Ok(&self.source[node.byte_range()])
+                }
+            }
+            "single_quote_scalar" | "double_quote_scalar" => {
+                let text = &self.source[node.byte_range()];
+                Ok(&text[1..text.len() - 1])
+            }
+            _ => Ok(&self.source[node.byte_range()]),
         }
     }
 }
 
-pub fn parse(text: &str) -> Result<Option<Document>> {
+pub fn parse(text: &str) -> Result<Option<Document<'_>>> {
     let mut parser = Parser::new();
     let language = tree_sitter_yaml::LANGUAGE;
 

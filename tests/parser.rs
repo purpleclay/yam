@@ -140,10 +140,7 @@ fn parse_scalar_boolean_with_comment() -> Result<()> {
 #[test]
 fn parse_scalar_double_quoted_string() -> Result<()> {
     let document = parse("\"hello, world!\"")?.unwrap();
-    assert_eq!(
-        document.root.value,
-        ScalarType::String("hello, world!".to_string())
-    );
+    assert_eq!(document.root.value, ScalarType::String("hello, world!"));
 
     Ok(())
 }
@@ -151,10 +148,7 @@ fn parse_scalar_double_quoted_string() -> Result<()> {
 #[test]
 fn parse_scalar_double_quoted_string_with_comment() -> Result<()> {
     let document = parse("\"hello, world!\" # comment")?.unwrap();
-    assert_eq!(
-        document.root.value,
-        ScalarType::String("hello, world!".to_string())
-    );
+    assert_eq!(document.root.value, ScalarType::String("hello, world!"));
     assert_eq!(document.root.comment, Some("comment".to_string()));
 
     Ok(())
@@ -165,7 +159,7 @@ fn parse_scalar_single_quoted_string() -> Result<()> {
     let document = parse("'good afternoon, good evening, and good night'")?.unwrap();
     assert_eq!(
         document.root.value,
-        ScalarType::String("good afternoon, good evening, and good night".to_string())
+        ScalarType::String("good afternoon, good evening, and good night")
     );
 
     Ok(())
@@ -176,7 +170,7 @@ fn parse_scalar_single_quoted_string_with_comment() -> Result<()> {
     let document = parse("'good afternoon, good evening, and good night' # comment")?.unwrap();
     assert_eq!(
         document.root.value,
-        ScalarType::String("good afternoon, good evening, and good night".to_string())
+        ScalarType::String("good afternoon, good evening, and good night")
     );
 
     assert_eq!(document.root.comment, Some("comment".to_string()));
@@ -187,7 +181,7 @@ fn parse_scalar_single_quoted_string_with_comment() -> Result<()> {
 #[test]
 fn parse_scalar_empty_string_double_quoted() -> Result<()> {
     let document = parse(r#""""#)?.unwrap();
-    assert_eq!(document.root.value, ScalarType::String("".to_string()));
+    assert_eq!(document.root.value, ScalarType::String(""));
 
     Ok(())
 }
@@ -195,7 +189,7 @@ fn parse_scalar_empty_string_double_quoted() -> Result<()> {
 #[test]
 fn parse_scalar_empty_string_single_quoted() -> Result<()> {
     let document = parse("''")?.unwrap();
-    assert_eq!(document.root.value, ScalarType::String("".to_string()));
+    assert_eq!(document.root.value, ScalarType::String(""));
 
     Ok(())
 }
@@ -203,10 +197,7 @@ fn parse_scalar_empty_string_single_quoted() -> Result<()> {
 #[test]
 fn parse_scalar_string_with_escape_newline() -> Result<()> {
     let document = parse(r#""hello\nworld""#)?.unwrap();
-    assert_eq!(
-        document.root.value,
-        ScalarType::String("hello\\nworld".to_string())
-    );
+    assert_eq!(document.root.value, ScalarType::String("hello\\nworld"));
 
     Ok(())
 }
@@ -214,10 +205,7 @@ fn parse_scalar_string_with_escape_newline() -> Result<()> {
 #[test]
 fn parse_scalar_string_with_escape_tab() -> Result<()> {
     let document = parse(r#""hello\tworld""#)?.unwrap();
-    assert_eq!(
-        document.root.value,
-        ScalarType::String("hello\\tworld".to_string())
-    );
+    assert_eq!(document.root.value, ScalarType::String("hello\\tworld"));
 
     Ok(())
 }
@@ -225,10 +213,7 @@ fn parse_scalar_string_with_escape_tab() -> Result<()> {
 #[test]
 fn parse_scalar_string_with_escape_backslash() -> Result<()> {
     let document = parse(r#""hello\\world""#)?.unwrap();
-    assert_eq!(
-        document.root.value,
-        ScalarType::String("hello\\\\world".to_string())
-    );
+    assert_eq!(document.root.value, ScalarType::String("hello\\\\world"));
 
     Ok(())
 }
@@ -236,10 +221,7 @@ fn parse_scalar_string_with_escape_backslash() -> Result<()> {
 #[test]
 fn parse_scalar_string_with_escape_quote() -> Result<()> {
     let document = parse(r#""hello\"world""#)?.unwrap();
-    assert_eq!(
-        document.root.value,
-        ScalarType::String("hello\\\"world".to_string())
-    );
+    assert_eq!(document.root.value, ScalarType::String("hello\\\"world"));
 
     Ok(())
 }
@@ -247,10 +229,7 @@ fn parse_scalar_string_with_escape_quote() -> Result<()> {
 #[test]
 fn parse_scalar_string_with_escape_carriage_return() -> Result<()> {
     let document = parse(r#""hello\rworld""#)?.unwrap();
-    assert_eq!(
-        document.root.value,
-        ScalarType::String("hello\\rworld".to_string())
-    );
+    assert_eq!(document.root.value, ScalarType::String("hello\\rworld"));
 
     Ok(())
 }
@@ -258,10 +237,7 @@ fn parse_scalar_string_with_escape_carriage_return() -> Result<()> {
 #[test]
 fn parse_scalar_string_with_escape_null() -> Result<()> {
     let document = parse(r#""hello\0world""#)?.unwrap();
-    assert_eq!(
-        document.root.value,
-        ScalarType::String("hello\\0world".to_string())
-    );
+    assert_eq!(document.root.value, ScalarType::String("hello\\0world"));
 
     Ok(())
 }
@@ -269,10 +245,7 @@ fn parse_scalar_string_with_escape_null() -> Result<()> {
 #[test]
 fn parse_scalar_string_with_unicode_escape_short() -> Result<()> {
     let document = parse(r#""\u0041""#)?.unwrap();
-    assert_eq!(
-        document.root.value,
-        ScalarType::String("\\u0041".to_string())
-    );
+    assert_eq!(document.root.value, ScalarType::String("\\u0041"));
 
     Ok(())
 }
@@ -280,10 +253,7 @@ fn parse_scalar_string_with_unicode_escape_short() -> Result<()> {
 #[test]
 fn parse_scalar_string_with_unicode_escape_long() -> Result<()> {
     let document = parse(r#""\U00000041""#)?.unwrap();
-    assert_eq!(
-        document.root.value,
-        ScalarType::String("\\U00000041".to_string())
-    );
+    assert_eq!(document.root.value, ScalarType::String("\\U00000041"));
 
     Ok(())
 }
@@ -291,10 +261,7 @@ fn parse_scalar_string_with_unicode_escape_long() -> Result<()> {
 #[test]
 fn parse_scalar_string_with_unicode_emoji() -> Result<()> {
     let document = parse(r#""\U0001F600""#)?.unwrap();
-    assert_eq!(
-        document.root.value,
-        ScalarType::String("\\U0001F600".to_string())
-    );
+    assert_eq!(document.root.value, ScalarType::String("\\U0001F600"));
 
     Ok(())
 }
@@ -302,7 +269,7 @@ fn parse_scalar_string_with_unicode_emoji() -> Result<()> {
 #[test]
 fn parse_scalar_string_single_quote_escape() -> Result<()> {
     let document = parse("'it''s'")?.unwrap();
-    assert_eq!(document.root.value, ScalarType::String("it''s".to_string()));
+    assert_eq!(document.root.value, ScalarType::String("it''s"));
 
     Ok(())
 }
@@ -310,10 +277,7 @@ fn parse_scalar_string_single_quote_escape() -> Result<()> {
 #[test]
 fn parse_scalar_string_unquoted() -> Result<()> {
     let document = parse("hello world")?.unwrap();
-    assert_eq!(
-        document.root.value,
-        ScalarType::String("hello world".to_string())
-    );
+    assert_eq!(document.root.value, ScalarType::String("hello world"));
 
     Ok(())
 }
@@ -323,7 +287,7 @@ fn parse_scalar_string_unquoted_with_colon() -> Result<()> {
     let document = parse("http://example.com")?.unwrap();
     assert_eq!(
         document.root.value,
-        ScalarType::String("http://example.com".to_string())
+        ScalarType::String("http://example.com")
     );
 
     Ok(())
@@ -332,7 +296,7 @@ fn parse_scalar_string_unquoted_with_colon() -> Result<()> {
 #[test]
 fn parse_scalar_string_whitespace_double_quoted() -> Result<()> {
     let document = parse(r#""   ""#)?.unwrap();
-    assert_eq!(document.root.value, ScalarType::String("   ".to_string()));
+    assert_eq!(document.root.value, ScalarType::String("   "));
 
     Ok(())
 }
@@ -340,7 +304,7 @@ fn parse_scalar_string_whitespace_double_quoted() -> Result<()> {
 #[test]
 fn parse_scalar_string_whitespace_single_quoted() -> Result<()> {
     let document = parse("'   '")?.unwrap();
-    assert_eq!(document.root.value, ScalarType::String("   ".to_string()));
+    assert_eq!(document.root.value, ScalarType::String("   "));
 
     Ok(())
 }
@@ -408,14 +372,14 @@ fn parse_scalar_list() -> Result<()> {
     assert_eq!(
         items[3],
         Scalar {
-            value: ScalarType::String("hello, world!".to_string()),
+            value: ScalarType::String("hello, world!"),
             comment: None
         }
     );
     assert_eq!(
         items[4],
         Scalar {
-            value: ScalarType::String("good afternoon, good evening, and good night".to_string()),
+            value: ScalarType::String("good afternoon, good evening, and good night"),
             comment: None
         }
     );
@@ -515,7 +479,7 @@ fn parse_scalar_map() -> Result<()> {
             assert_eq!(
                 map[0].value,
                 Scalar {
-                    value: ScalarType::String("truman".to_string()),
+                    value: ScalarType::String("truman"),
                     comment: None,
                 }
             );
