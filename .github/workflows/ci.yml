@@ -24,7 +24,7 @@ permissions:
   pull-requests: read
 jobs:
   changes:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       pull-requests: read
     outputs:
@@ -46,7 +46,7 @@ jobs:
               - 'tests/**'
 
   rustfmt:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: changes
     if: github.actor != 'renovate[bot]' && needs.changes.outputs.src == 'true'
     name: rustfmt / stable
@@ -71,7 +71,7 @@ jobs:
         run: nix develop -c cargo fmt --check
 
   clippy:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: changes
     if: needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true'
     name: clippy / stable
@@ -134,7 +134,7 @@ jobs:
         run: nix develop -c cargo test
 
   build-fast:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: changes
     if: github.event_name == 'pull_request' && needs.changes.outputs.src == 'true'
     name: build-fast / linux_x86_64_musl
